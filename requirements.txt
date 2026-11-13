@@ -1,0 +1,11 @@
+# Push-T diffusion policy (keypoint stage) - Python 3.13
+# Direct dependencies only. After installing, lock exact versions with:
+#   pip freeze > requirements.lock      (or `uv pip freeze` in a uv-created venv)
+
+torch==2.14.1         # after install, confirm 'sm_120' is in torch.cuda.get_arch_list() (5070 Ti)
+numpy==2.5.4
+pyarrow==26.0.0       # reads the LeRobot parquet files directly
+gym-pusht==0.1.8      # simulator; pulls in gymnasium, pymunk, pygame, shapely, opencv, scikit-image
+matplotlib==3.11.2
+huggingface_hub==2.3.0  # provides the `hf download` CLI used in the README
+pandas==3.1.1

@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.ipynb_checkpoints/
+
+# Datasets: download from the Hugging Face Hub (see README), don't commit
+data/
+
+# Training and evaluation outputs
+checkpoints/
+outputs/
+runs/
+wandb/
+*.pt
+*.pth
+*.ckpt
+*.mp4
+*.gif
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
