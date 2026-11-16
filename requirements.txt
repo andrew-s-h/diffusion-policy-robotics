@@ -9,3 +9,4 @@ gym-pusht==0.1.8      # simulator; pulls in gymnasium, pymunk, pygame, shapely, 
 matplotlib==3.11.2
 huggingface_hub==2.3.0  # provides the `hf download` CLI used in the README
 pandas==3.1.1
+pytest==9.2.0         # tests: run `pytest` from the repo root
