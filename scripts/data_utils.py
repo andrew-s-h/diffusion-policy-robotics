@@ -21,7 +21,19 @@ def col(table, name):
     return c.to_numpy(zero_copy_only=False)
 
 def load_episode(table, episode):
-    """Returns all frames of one episode sorted by time as a dictionary of numpy arrays"""
+    """Returns all frames of one episode sorted by time as a dictionary of numpy arrays.
+    T is the number of frames in the episode (e.g. 161 for episode 0).
+    Args:
+        table (pa.Table): from load_table
+        episode (int): episode index, 0 to 205
+    Returns:
+        dict: in pixels, not normalized
+            "state" (T, 2): pusher (x, y), from observation.state
+            "keypoints" (T, 16): 8 (x, y) corners of the T block,
+                from observation.environment_state
+            "action" (T, 2): target (x, y) the pusher moves toward
+            "success" (T,) bool: True once the block covers the goal (95%+)
+    """
     mask = col(table, "episode_index") == episode
     if not mask.any():
         raise ValueError(f"no episode {episode}")
