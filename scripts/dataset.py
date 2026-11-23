@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from data_utils import load_episode, load_table
+from data_utils import col, load_episode, load_table
 from normalize import load_stats, normalize
 
 
@@ -17,14 +17,15 @@ def episode_arrays(e, stats):
         stats (dict): from load_stats; {column name: {"min": array, "max": array}}
 
     Returns:
-        tuple[np.ndarray, np.ndarray]: obs (T, 18) and actions (T, 2), both in [-1, 1]
+        tuple[np.ndarray, np.ndarray]: obs = state+ keypoints (T, 18) and 
+            actions (T, 2), both in [-1, 1]
     """
 
-    # robot pusher
+    # robot pusher pos, 2 points
     state = normalize(e["state"], stats["observation.state"])
-    # t-block
+    # t-block pos, 16 points
     keypoints = normalize(e["keypoints"], stats["observation.environment_state"])
-    # target the pusher moves toward
+    # target the pusher moves toward, 2 points
     actions = normalize(e["action"], stats["action"])
 
     obs = np.concatenate([state, keypoints], axis=1)
@@ -85,20 +86,70 @@ def make_windows(obs_padded, actions_padded, T, n_obs=2, n_actions=16):
     obs_windows = []
     action_windows = []
     for t in range(T):
-        obs_windows.append(obs_padded[t:t+n_obs]) #(2, 18)
+        # frame t-1, t from the slicing 
+        obs_windows.append(obs_padded[t:t+n_obs]) # (2, 18)
+        # actions t...t+15 from slicing actions_padded
         action_windows.append(actions_padded[t:t+n_actions]) # (16, 2)
     return np.stack(obs_windows), np.stack(action_windows)
+
+
+class PushTWindows(Dataset):
+    """Every training window from all 206 Push-T keypoint episodes.
+
+    Each episode is normalized, padded, and cut into one window per frame,
+    then all episodes are joined: 25,650 windows in total.
+
+    Each item is a pair (obs, actions):
+        obs (torch.Tensor): (n_obs, 18), frames t-1..t
+        actions (torch.Tensor): (n_actions, 2), actions t..t+15
+
+    Args:
+        n_obs (int): observations per window
+        n_actions (int): actions per window
+    """
+
+    def __init__(self, n_obs=2, n_actions=16):
+        table = load_table()
+        stats = load_stats()
+        episodes = np.unique(col(table, "episode_index"))
+    
+        all_obs, all_actions = [], []
+
+        for ep in episodes:
+            obs, actions = episode_arrays(load_episode(table, ep), stats)
+            obs_padded, actions_padded = pad_episode(obs, actions, n_obs, n_actions)
+            obs_windows, action_windows = make_windows(obs_padded, actions_padded, len(obs), n_obs, n_actions)
+            # obs_windows: (T, 2, 18), T = frames in this episode
+            # 2 is from t-1, t frames
+            all_obs.append(obs_windows)
+            # action_windows: (T, 16, 2), T = frames in this episode
+            all_actions.append(action_windows)
+        # all episodes joined: (25650, 2, 18)
+        self.obs = torch.tensor(np.concatenate(all_obs), dtype=torch.float32)
+        # all episodes joined (25650, 16, 2)
+        self.actions = torch.tensor(np.concatenate(all_actions), dtype=torch.float32)
+
+    def __len__(self):
+        return len(self.obs)
+
+    def __getitem__(self, i):
+        return self.obs[i], self.actions[i]
+
 
 if __name__ == "__main__":
     stats = load_stats()
     e = load_episode(load_table(), 0)
     obs, actions = episode_arrays(e, stats)
-    print(obs.shape, actions.shape)
-    print(obs.min(), obs.max())
+    print(f"episode 0: obs {obs.shape}, actions {actions.shape}")
+    print(f"obs range: {obs.min():.2f} to {obs.max():.2f}")
 
     obs_padded, actions_padded = pad_episode(obs, actions)
-    print(obs_padded.shape, actions_padded.shape)   # (162, 18) (176, 2)
+    print(f"padded: obs {obs_padded.shape}, actions {actions_padded.shape}")
 
     obs_windows, action_windows = make_windows(obs_padded, actions_padded, len(obs))
-    print(obs_windows.shape, action_windows.shape)  # (161, 2, 18) (161, 16, 2)
+    print(f"windows: obs {obs_windows.shape}, actions {action_windows.shape}")
+
+    ds = PushTWindows()
+    o, a = ds[0]
+    print(f"dataset: {len(ds)} windows, obs {tuple(o.shape)}, actions {tuple(a.shape)}")
 
