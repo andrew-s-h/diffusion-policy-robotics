@@ -13,15 +13,40 @@ def load_table(root=ROOT):
 
 
 def col(table, name):
-    """Column as numpy: (N, ) for scalars, (N, d) for list columns"""
+    """Read one column of the table as a numpy array.
+
+    N is the number of rows in the table (25,650 frames for the full dataset).
+
+    Args:
+        table (pa.Table): from load_table
+        name (str): column name, e.g. "episode_index" or "observation.state"
+
+    Returns:
+        np.ndarray: (N,) for one value per row, like "episode_index",
+            or (N, d) for a list per row, like "observation.state" (N, 2)
+    """
     c = table.column(name).combine_chunks()
     t = c.type
+    # list per row, e.g. state [[x, y], ...]: flatten to (N*d,), reshape to (N, d)
     if pa.types.is_list(t) or pa.types.is_large_list(t) or pa.types.is_fixed_size_list(t):
         return c.flatten().to_numpy(zero_copy_only=False).reshape(len(c), -1)
+    # one value per row, e.g. episode_index: (N,)
     return c.to_numpy(zero_copy_only=False)
 
 def load_episode(table, episode):
-    """Returns all frames of one episode sorted by time as a dictionary of numpy arrays"""
+    """Returns all frames of one episode sorted by time as a dictionary of numpy arrays.
+    T is the number of frames in the episode (e.g. 161 for episode 0).
+    Args:
+        table (pa.Table): from load_table
+        episode (int): episode index, 0 to 205
+    Returns:
+        dict: in pixels, not normalized
+            "state" (T, 2): pusher (x, y), from observation.state
+            "keypoints" (T, 16): 8 (x, y) corners of the T block,
+                from observation.environment_state
+            "action" (T, 2): target (x, y) the pusher moves toward
+            "success" (T,) bool: True once the block covers the goal (95%+)
+    """
     mask = col(table, "episode_index") == episode
     if not mask.any():
         raise ValueError(f"no episode {episode}")
